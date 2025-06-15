@@ -13,20 +13,35 @@ from fastapi.encoders import jsonable_encoder
 
 router = APIRouter(tags=["Feed"])
 
-@router.get("/feed")
-def get_feed(db: Session = Depends(get_db)):
+@router.get("/feed/{user_id}")
+def get_feed(user_id: UUID = None, db: Session = Depends(get_db)):
     try:
-        posts_query = (
-            db.query(Post)
-            .order_by(Post.created_at.desc())
-            .limit(60)
-            .all()
-        )
+        # 查询：is_active=True 或 本人发布的帖子
+        if user_id:
+            posts_query = (
+                db.query(Post)
+                .filter(
+                    (Post.is_active == True) | (Post.user_id == user_id)
+                )
+                .order_by(Post.created_at.desc())
+                .limit(60)
+                .all()
+            )
+        else:
+            # 如果没提供 user_id，只展示激活的帖子
+            posts_query = (
+                db.query(Post)
+                .filter(Post.is_active == True)
+                .order_by(Post.created_at.desc())
+                .limit(60)
+                .all()
+            )
 
         result = []
         for post in posts_query:
             try:
                 image_urls = json.loads(post.image_urls) if isinstance(post.image_urls, str) else (post.image_urls or [])
+                
             except Exception:
                 image_urls = []
 
@@ -48,7 +63,6 @@ def get_feed(db: Session = Depends(get_db)):
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, media_type="application/json; charset=utf-8")
-
 
 @router.get("/feed/followed/{user_id}")
 def get_followed_posts(user_id: UUID, db: Session = Depends(get_db)):
